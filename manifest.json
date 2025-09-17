@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Floaty MVP",
+  "version": "1.0.0",
+  "description": "Text selection AI assistant",
+  "permissions": [
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://api.openai.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ]
+}
