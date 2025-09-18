@@ -1,8 +1,5 @@
-// FLOATY MVP - TICKET-000: Proof of Concept
-// Speed hack: Hardcoded API key for POC only
-const OPENAI_API_KEY = "YOUR_API_KEY_HERE"; // TODO: Replace with your actual key
-
-console.log("Floaty POC: Content script loaded");
+// FLOATY MVP - TICKET-002: API Key Storage
+console.log("Floaty: Content script loaded");
 
 // Listen for text selection
 document.addEventListener('mouseup', async () => {
@@ -23,11 +20,20 @@ document.addEventListener('mouseup', async () => {
 async function callOpenAI(text) {
   console.log("Calling OpenAI API...");
 
+  // Get API key from storage
+  const result = await chrome.storage.local.get(['openai_api_key']);
+  const apiKey = result.openai_api_key;
+
+  if (!apiKey) {
+    console.error("No API key found. Please set it in the extension popup.");
+    return;
+  }
+
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${OPENAI_API_KEY}`
+      'Authorization': `Bearer ${apiKey}`
     },
     body: JSON.stringify({
       model: 'gpt-4',

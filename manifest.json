@@ -4,7 +4,8 @@
   "version": "1.0.0",
   "description": "Text selection AI assistant",
   "permissions": [
-    "activeTab"
+    "activeTab",
+    "storage"
   ],
   "host_permissions": [
     "https://api.openai.com/*"
@@ -14,5 +15,8 @@
       "matches": ["<all_urls>"],
       "js": ["content.js"]
     }
-  ]
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
 }
