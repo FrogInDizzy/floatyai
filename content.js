@@ -71,46 +71,127 @@ function isValidSelection(text) {
   return true;
 }
 
-async function callOpenAI(text) {
-  console.log("Calling OpenAI API...");
+// Prompt templates
+const PROMPT_TEMPLATES = {
+  summarize: (text) => `Summarize this text in 2-3 sentences:\n\n${text}`,
+  explain: (text) => `Explain this text in simple terms:\n\n${text}`,
+  translate: (text) => `Translate this text to English if it's in another language, or improve the grammar if it's already in English:\n\n${text}`
+};
+
+async function callOpenAI(text, retryCount = 0) {
+  console.log(`Calling OpenAI API... (attempt ${retryCount + 1})`);
 
   // Get API key from storage
   const result = await chrome.storage.local.get(['openai_api_key']);
   const apiKey = result.openai_api_key;
 
   if (!apiKey) {
-    console.error("No API key found. Please set it in the extension popup.");
-    return;
+    const error = "No API key found. Please set it in the extension popup.";
+    console.error(error);
+    throw new Error(error);
   }
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: 'gpt-4',
-      messages: [
-        {
-          role: 'user',
-          content: `Summarize this text: ${text}`
+  // Basic API key validation
+  if (!apiKey.startsWith('sk-')) {
+    const error = "Invalid API key format. Should start with 'sk-'";
+    console.error(error);
+    throw new Error(error);
+  }
+
+  console.log("API key found, making request...");
+
+  try {
+    // Create timeout controller (30 seconds)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4',
+        messages: [
+          {
+            role: 'user',
+            content: PROMPT_TEMPLATES.summarize(text)
+          }
+        ],
+        max_tokens: 150,
+        temperature: 0.7
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+    console.log("Response status:", response.status);
+
+    // Handle rate limiting with retry
+    if (response.status === 429 && retryCount === 0) {
+      console.log("Rate limited, retrying in 2 seconds...");
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      return callOpenAI(text, retryCount + 1);
+    }
+
+    if (!response.ok) {
+      let errorMessage = `HTTP ${response.status}`;
+
+      try {
+        const errorData = await response.json();
+        console.error("API Error Details:", errorData);
+
+        if (response.status === 401) {
+          errorMessage = "Invalid API key. Please check your OpenAI API key in the extension popup.";
+        } else if (response.status === 429) {
+          errorMessage = "Rate limit exceeded. Please try again in a few minutes.";
+        } else if (response.status === 402) {
+          errorMessage = "Insufficient credits. Please add credits to your OpenAI account.";
+        } else if (response.status === 503) {
+          errorMessage = "OpenAI service temporarily unavailable. Please try again later.";
+        } else if (errorData.error && errorData.error.message) {
+          errorMessage = errorData.error.message;
         }
-      ],
-      max_tokens: 150,
-      temperature: 0.7
-    })
-  });
+      } catch (e) {
+        console.error("Could not parse error response");
+      }
 
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      throw new Error("Invalid response format from OpenAI");
+    }
+
+    const summary = data.choices[0].message.content;
+    console.log("AI Response:", summary);
+    return summary;
+
+  } catch (error) {
+    console.error("Fetch error:", error);
+
+    // Handle timeout
+    if (error.name === 'AbortError') {
+      throw new Error("Request timed out after 30 seconds. Please try again.");
+    }
+
+    // Handle network errors
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      throw new Error("Network error. Check your internet connection and try again.");
+    }
+
+    // Retry once for network/timeout errors
+    if (retryCount === 0 && (error.name === 'TypeError' || error.name === 'AbortError')) {
+      console.log("Retrying request in 2 seconds...");
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      return callOpenAI(text, retryCount + 1);
+    }
+
+    throw error;
   }
-
-  const data = await response.json();
-  const summary = data.choices[0].message.content;
-
-  console.log("AI Response:", summary);
-  return summary;
 }
 
 // UI Functions
