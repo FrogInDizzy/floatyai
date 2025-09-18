@@ -1,21 +1,69 @@
-// FLOATY MVP - TICKET-002: API Key Storage
+// FLOATY MVP - TICKET-003: Selection & Trigger
 console.log("Floaty: Content script loaded");
 
-// Listen for text selection
-document.addEventListener('mouseup', async () => {
-  const selectedText = window.getSelection().toString().trim();
+// Debouncing for keyboard shortcuts
+let debounceTimer = null;
 
-  if (selectedText.length > 0) {
-    console.log("Selected text:", selectedText);
+// Listen for keyboard shortcut: Ctrl+Shift+F
+document.addEventListener('keydown', async (event) => {
+  // Check for Ctrl+Shift+F
+  if (event.ctrlKey && event.shiftKey && event.key === 'F') {
+    event.preventDefault(); // Prevent browser's find dialog
 
-    try {
-      // TODO: Add validation for minimum text length
-      await callOpenAI(selectedText);
-    } catch (error) {
-      console.error("OpenAI call failed:", error);
+    // Clear existing debounce timer
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
     }
+
+    // Debounce the trigger (300ms)
+    debounceTimer = setTimeout(async () => {
+      await handleSelection();
+    }, 300);
   }
 });
+
+async function handleSelection() {
+  const selectedText = getSelectedText();
+
+  if (!selectedText) {
+    console.log("No text selected");
+    return;
+  }
+
+  if (!isValidSelection(selectedText)) {
+    console.log("Selection too short (minimum 10 characters)");
+    return;
+  }
+
+  console.log("Processing selected text:", selectedText.substring(0, 50) + "...");
+  console.log("🚀 Floaty triggered! Processing with AI...");
+
+  try {
+    await callOpenAI(selectedText);
+  } catch (error) {
+    console.error("❌ OpenAI call failed:", error);
+  }
+}
+
+function getSelectedText() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return null;
+  }
+
+  const selectedText = selection.toString().trim();
+  return selectedText.length > 0 ? selectedText : null;
+}
+
+function isValidSelection(text) {
+  // Basic validation: minimum 10 characters
+  if (text.length < 10) {
+    return false;
+  }
+
+  // TODO: Add more validation (e.g., not just whitespace, reasonable max length)
+  return true;
+}
 
 async function callOpenAI(text) {
   console.log("Calling OpenAI API...");
