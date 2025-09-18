@@ -1,8 +1,9 @@
-// FLOATY MVP - TICKET-003: Selection & Trigger
+// FLOATY MVP - TICKET-004: Minimal Floating UI
 console.log("Floaty: Content script loaded");
 
 // Debouncing for keyboard shortcuts
 let debounceTimer = null;
+let currentOverlay = null;
 
 // Listen for keyboard shortcut: Ctrl+Shift+F
 document.addEventListener('keydown', async (event) => {
@@ -38,10 +39,15 @@ async function handleSelection() {
   console.log("Processing selected text:", selectedText.substring(0, 50) + "...");
   console.log("🚀 Floaty triggered! Processing with AI...");
 
+  // Show loading overlay
+  showLoadingOverlay();
+
   try {
-    await callOpenAI(selectedText);
+    const response = await callOpenAI(selectedText);
+    showResponseOverlay(response);
   } catch (error) {
     console.error("❌ OpenAI call failed:", error);
+    showErrorOverlay("Failed to get AI response. Check your API key and try again.");
   }
 }
 
@@ -104,7 +110,145 @@ async function callOpenAI(text) {
   const summary = data.choices[0].message.content;
 
   console.log("AI Response:", summary);
-
-  // TODO: Replace console.log with actual UI
   return summary;
+}
+
+// UI Functions
+function createOverlay() {
+  removeCurrentOverlay();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'floaty-overlay';
+
+  // Add CSS styles directly
+  overlay.style.cssText = `
+    position: fixed;
+    background: white;
+    border: 1px solid #ccc;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    padding: 16px;
+    max-width: 300px;
+    z-index: 9999;
+    border-radius: 6px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.4;
+    top: 20px;
+    right: 20px;
+  `;
+
+  document.body.appendChild(overlay);
+  currentOverlay = overlay;
+
+  // Click outside to dismiss
+  setTimeout(() => {
+    document.addEventListener('click', handleOutsideClick, true);
+  }, 100);
+
+  return overlay;
+}
+
+function removeCurrentOverlay() {
+  if (currentOverlay) {
+    document.removeEventListener('click', handleOutsideClick, true);
+    currentOverlay.remove();
+    currentOverlay = null;
+  }
+}
+
+function handleOutsideClick(event) {
+  if (currentOverlay && !currentOverlay.contains(event.target)) {
+    removeCurrentOverlay();
+  }
+}
+
+function showLoadingOverlay() {
+  const overlay = createOverlay();
+  overlay.innerHTML = `
+    <div style="text-align: center;">
+      <div style="margin-bottom: 8px;">🤖 Floaty AI</div>
+      <div style="display: inline-block; width: 20px; height: 20px; border: 2px solid #f3f3f3; border-top: 2px solid #007cba; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+      <div style="margin-top: 8px; color: #666;">Processing...</div>
+    </div>
+  `;
+
+  // Add spin animation
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function showResponseOverlay(response) {
+  const overlay = createOverlay();
+  overlay.innerHTML = `
+    <div>
+      <div style="margin-bottom: 12px; font-weight: bold; color: #007cba;">🤖 Floaty AI</div>
+      <div style="margin-bottom: 12px; color: #333;">${response}</div>
+      <button id="floaty-copy" style="
+        background: #007cba;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+      ">Copy</button>
+      <button id="floaty-close" style="
+        background: #f5f5f5;
+        color: #666;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        margin-left: 8px;
+      ">Close</button>
+    </div>
+  `;
+
+  // Add button event listeners
+  const copyBtn = overlay.querySelector('#floaty-copy');
+  const closeBtn = overlay.querySelector('#floaty-close');
+
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(response).then(() => {
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => {
+        copyBtn.textContent = 'Copy';
+      }, 1000);
+    });
+  });
+
+  closeBtn.addEventListener('click', () => {
+    removeCurrentOverlay();
+  });
+}
+
+function showErrorOverlay(errorMessage) {
+  const overlay = createOverlay();
+  overlay.innerHTML = `
+    <div>
+      <div style="margin-bottom: 12px; font-weight: bold; color: #dc3545;">❌ Error</div>
+      <div style="margin-bottom: 12px; color: #666;">${errorMessage}</div>
+      <button id="floaty-close" style="
+        background: #dc3545;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+      ">Close</button>
+    </div>
+  `;
+
+  const closeBtn = overlay.querySelector('#floaty-close');
+  closeBtn.addEventListener('click', () => {
+    removeCurrentOverlay();
+  });
 }
