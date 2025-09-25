@@ -9,6 +9,16 @@ let currentOverlay = null;
 document.addEventListener('keydown', async (event) => {
   // Check for Ctrl+Shift+F
   if (event.ctrlKey && event.shiftKey && event.key === 'F') {
+    // Don't trigger if user is typing in an input field
+    const activeElement = document.activeElement;
+    if (activeElement && (
+      activeElement.tagName === 'INPUT' ||
+      activeElement.tagName === 'TEXTAREA' ||
+      activeElement.contentEditable === 'true'
+    )) {
+      return;
+    }
+
     event.preventDefault(); // Prevent browser's find dialog
 
     // Clear existing debounce timer
@@ -58,7 +68,14 @@ function getSelectedText() {
   }
 
   const selectedText = selection.toString().trim();
-  return selectedText.length > 0 ? selectedText : null;
+
+  // Handle edge case where selection might be empty despite rangeCount > 0
+  if (selectedText.length === 0) {
+    return null;
+  }
+
+  // Remove excessive whitespace and normalize
+  return selectedText.replace(/\s+/g, ' ');
 }
 
 function isValidSelection(text) {
@@ -224,6 +241,7 @@ function createOverlay() {
   // Click outside to dismiss
   setTimeout(() => {
     document.addEventListener('click', handleOutsideClick, true);
+    document.addEventListener('keydown', handleEscapeKey, true);
   }, 100);
 
   return overlay;
@@ -232,6 +250,7 @@ function createOverlay() {
 function removeCurrentOverlay() {
   if (currentOverlay) {
     document.removeEventListener('click', handleOutsideClick, true);
+    document.removeEventListener('keydown', handleEscapeKey, true);
     currentOverlay.remove();
     currentOverlay = null;
   }
@@ -239,6 +258,13 @@ function removeCurrentOverlay() {
 
 function handleOutsideClick(event) {
   if (currentOverlay && !currentOverlay.contains(event.target)) {
+    removeCurrentOverlay();
+  }
+}
+
+function handleEscapeKey(event) {
+  if (event.key === 'Escape' && currentOverlay) {
+    event.preventDefault();
     removeCurrentOverlay();
   }
 }
@@ -278,6 +304,7 @@ function showResponseOverlay(response) {
         border-radius: 4px;
         cursor: pointer;
         font-size: 12px;
+        transition: all 0.2s ease;
       ">Copy</button>
       <button id="floaty-close" style="
         background: #f5f5f5;
@@ -298,10 +325,27 @@ function showResponseOverlay(response) {
 
   copyBtn.addEventListener('click', () => {
     navigator.clipboard.writeText(response).then(() => {
-      copyBtn.textContent = 'Copied!';
+      const originalText = copyBtn.textContent;
+      const originalStyle = copyBtn.style.cssText;
+
+      copyBtn.textContent = '✓ Copied!';
+      copyBtn.style.cssText = originalStyle + 'background: #28a745; transform: scale(0.95);';
+
       setTimeout(() => {
-        copyBtn.textContent = 'Copy';
-      }, 1000);
+        copyBtn.textContent = originalText;
+        copyBtn.style.cssText = originalStyle;
+      }, 1500);
+    }).catch(() => {
+      const originalText = copyBtn.textContent;
+      const originalStyle = copyBtn.style.cssText;
+
+      copyBtn.textContent = '✗ Failed';
+      copyBtn.style.cssText = originalStyle + 'background: #dc3545;';
+
+      setTimeout(() => {
+        copyBtn.textContent = originalText;
+        copyBtn.style.cssText = originalStyle;
+      }, 1500);
     });
   });
 
