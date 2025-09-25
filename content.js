@@ -323,10 +323,25 @@ function showResponseOverlay(response) {
   const copyBtn = overlay.querySelector('#floaty-copy');
   const closeBtn = overlay.querySelector('#floaty-close');
 
-  copyBtn.addEventListener('click', () => {
-    navigator.clipboard.writeText(response).then(() => {
-      const originalText = copyBtn.textContent;
-      const originalStyle = copyBtn.style.cssText;
+  copyBtn.addEventListener('click', async () => {
+    const originalText = copyBtn.textContent;
+    const originalStyle = copyBtn.style.cssText;
+
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(response);
+      } else {
+        // Fallback for non-secure contexts or older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = response;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
 
       copyBtn.textContent = '✓ Copied!';
       copyBtn.style.cssText = originalStyle + 'background: #28a745; transform: scale(0.95);';
@@ -335,9 +350,9 @@ function showResponseOverlay(response) {
         copyBtn.textContent = originalText;
         copyBtn.style.cssText = originalStyle;
       }, 1500);
-    }).catch(() => {
-      const originalText = copyBtn.textContent;
-      const originalStyle = copyBtn.style.cssText;
+
+    } catch (error) {
+      console.error('Copy failed:', error);
 
       copyBtn.textContent = '✗ Failed';
       copyBtn.style.cssText = originalStyle + 'background: #dc3545;';
@@ -346,7 +361,7 @@ function showResponseOverlay(response) {
         copyBtn.textContent = originalText;
         copyBtn.style.cssText = originalStyle;
       }, 1500);
-    });
+    }
   });
 
   closeBtn.addEventListener('click', () => {
